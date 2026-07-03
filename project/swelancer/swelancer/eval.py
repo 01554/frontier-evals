@@ -127,7 +127,10 @@ class SWELancerTask(ComputerTask):
             try:
                 # Assert various things about the environment
                 ctx_logger.info("SETUP", destinations=["run"])
-                if isinstance(computer, JupyterComputerInterface):
+                skip_jupyter_setup = (
+                    os.getenv("ALCATRAZ_SKIP_JUPYTER_SETUP", "false").lower() == "true"
+                )
+                if isinstance(computer, JupyterComputerInterface) and not skip_jupyter_setup:
                     await computer.check_execute(
                         """import os; assert os.environ.get('CONDA_DEFAULT_ENV') == 'testbed', os.environ.get('CONDA_DEFAULT_ENV')""",
                     )

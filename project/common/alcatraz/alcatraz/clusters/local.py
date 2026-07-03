@@ -63,6 +63,30 @@ _FREE_PORTS: set[int] = set(range(*map(int, os.getenv("FREE_PORTS", "10000-32767
 VS_CODE_PORT = 8000
 
 
+def _is_container_removal_already_in_progress(error: docker.errors.APIError) -> bool:
+    explanation = getattr(error, "explanation", "") or str(error)
+    return "removal of container" in explanation and "already in progress" in explanation
+
+
+def _remove_container_force(container: Container) -> None:
+    try:
+        container.remove(force=True)
+    except docker.errors.NotFound:
+        logger.info("Container %s already removed.", container.name)
+    except docker.errors.APIError as error:
+        if _is_container_removal_already_in_progress(error):
+            logger.info("Container %s removal is already in progress.", container.name)
+            return
+        raise
+
+
+def _remove_network_if_exists(network: Network) -> None:
+    try:
+        network.remove()
+    except docker.errors.NotFound:
+        logger.info("Network %s already removed.", network.name)
+
+
 class VolumeConfig(TypedDict):
     bind_source: str
     bind_dest: str
@@ -414,7 +438,7 @@ class BaseAlcatrazCluster(ABC):
             if isinstance(self, LocalCluster):
                 # Add the container to the exit stack so it gets removed when we're done.
                 self._exit_stack.push_async_callback(
-                    lambda: asyncio.to_thread(ctr.remove, force=True)
+                    lambda: asyncio.to_thread(_remove_container_force, ctr)
                 )
             # Also free our host port leases when we're done with this container.
             self._exit_stack.push(stack.__exit__)
@@ -610,7 +634,7 @@ class BaseAlcatrazCluster(ABC):
                 raise
             if isinstance(self, LocalCluster):
                 self._exit_stack.push_async_callback(
-                    lambda: asyncio.to_thread(self.docker_network.remove)
+                    lambda: asyncio.to_thread(_remove_network_if_exists, self.docker_network)
                 )
 
         self.containers: list[Container] = []
@@ -1355,6 +1379,7 @@ class BaseAlcatrazCluster(ABC):
                 connection_file[k] = next(
                     h for h, ctr_port in zip(host_port_leases, ports_to_forward) if v == ctr_port
                 )
+        connection_file["ip"] = os.getenv("ALCATRAZ_JUPYTER_HOST_IP", "127.0.0.1")
 
         logger.info("connecting to kernel!")
         # connect to the kernel
@@ -1375,7 +1400,8 @@ class BaseAlcatrazCluster(ABC):
 
         self._exit_stack.push_async_callback(cleanup)
 
-        await self._kernel.wait_for_ready(timeout=60.0)
+        kernel_ready_timeout = float(os.getenv("ALCATRAZ_JUPYTER_READY_TIMEOUT", "60.0"))
+        await self._kernel.wait_for_ready(timeout=kernel_ready_timeout)
         assert await self.kernel_is_alive()
         logger.info("Kernel is alive!")
 
@@ -1670,13 +1696,13 @@ class BaseAlcatrazCluster(ABC):
         for network in new_networks:
             if isinstance(self, LocalCluster):
                 self._exit_stack.push_async_callback(
-                    lambda network=network: asyncio.to_thread(network.remove)  # type: ignore
+                    lambda network=network: asyncio.to_thread(_remove_network_if_exists, network)  # type: ignore
                 )
 
         for ctr in docker_compose_containers:
             if isinstance(self, LocalCluster):
                 self._exit_stack.push_async_callback(
-                    lambda ctr=ctr: asyncio.to_thread(ctr.remove, force=True)  # type: ignore
+                    lambda ctr=ctr: asyncio.to_thread(_remove_container_force, ctr)  # type: ignore
                 )
                 self._exit_stack.push_async_callback(
                     lambda ctr=ctr: asyncio.to_thread(ctr.stop)  # type: ignore
@@ -2045,7 +2071,7 @@ class LocalCluster(BaseAlcatrazCluster):
         logger.info(f"[garbage-collector] Removing {net.name} with containers {net.containers}")
         for container in net.containers:
             try:
-                container.remove(force=True)
+                _remove_container_force(container)
             except Exception:
                 logger.error(
                     f"[garbage-collector] failed to remove {container.name} , maybe this container is in multiple networks?"
@@ -2076,7 +2102,7 @@ class LocalCluster(BaseAlcatrazCluster):
                     net = docker_client.networks.get("tinydockernet-" + ntwk.name.split(".lock")[0])
                     net.reload()
                     for container in net.containers:
-                        container.remove(force=True)
+                        _remove_container_force(container)
                     net.remove()
                 except docker.errors.NotFound:
                     logger.info(f"[garbage-collector] Network {ntwk.name} not found")

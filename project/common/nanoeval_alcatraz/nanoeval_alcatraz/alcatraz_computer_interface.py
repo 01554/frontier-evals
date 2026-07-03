@@ -201,9 +201,13 @@ class AlcatrazComputerRuntime(ComputerRuntime):
         # This is an Alcatraz only feature. It must be done before Internet access is disabled, because
         # Alcatraz supports live-installing Jupyter.
         # TODO(kevinliu) we should catalog which evals rely on this and remove it.
-        logger.info("Running initial Jupyter command to ensure Jupyter is installed")
-        await computer.execute("print('hi')")
-        logger.info("Jupyter working!")
+        skip_jupyter_setup = os.getenv("ALCATRAZ_SKIP_JUPYTER_SETUP", "false").lower() == "true"
+        if skip_jupyter_setup:
+            logger.info("Skipping initial Jupyter command")
+        else:
+            logger.info("Running initial Jupyter command to ensure Jupyter is installed")
+            await computer.execute("print('hi')")
+            logger.info("Jupyter working!")
 
         # Alcatraz must do this dynamically since it doesn't have the ability to remove
         # a container's internet access at creation time.
@@ -224,4 +228,3 @@ class AlcatrazComputerRuntime(ComputerRuntime):
         async with task_to_alcatraz_config(task, self.env).build() as _cluster:
             computer = AlcatrazComputerInterface(cluster_value=_cluster)
             yield computer
-

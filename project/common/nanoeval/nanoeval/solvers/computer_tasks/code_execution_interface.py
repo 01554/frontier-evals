@@ -1,4 +1,5 @@
 import ast
+import os
 import shlex
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
@@ -253,7 +254,8 @@ class ComputerConfiguration(BaseModel):
             num_gpus = int(num_gpus.output.decode())
             assert self.num_gpus == num_gpus, f"{self.num_gpus=} != {num_gpus=}"
 
-        if isinstance(computer, JupyterComputerInterface):
+        skip_jupyter_setup = os.getenv("ALCATRAZ_SKIP_JUPYTER_SETUP", "false").lower() == "true"
+        if isinstance(computer, JupyterComputerInterface) and not skip_jupyter_setup:
             await computer.check_execute(f"%cd {self.cwd}")
             res = await computer.check_execute("import os; os.getcwd()")
             assert res.parsed_final_expression_output == self.cwd, (
