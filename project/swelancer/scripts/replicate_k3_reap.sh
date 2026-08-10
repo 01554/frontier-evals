@@ -2,10 +2,12 @@
 # One-button replication of the Kimi-K3 REAP SWE-Lancer results.
 #   https://github.com/01554/kimi-k3-gguf-prune/blob/main/evals/
 #
-#   scripts/replicate_k3_reap.sh <build> <taskset>
+#   scripts/replicate_k3_reap.sh <build> <taskset | task_id...>
 #
 #   build:   reap640 | reap576 | full896-stream
 #   taskset: probe | differential | trio | battle16 | all24
+#            or any explicit IC-SWE Diamond task IDs:
+#              scripts/replicate_k3_reap.sh reap576 14294 15925 44040_470
 #
 # Environment:
 #   LLAMA_SERVER  path to llama-server built from 01554/llama.cpp branch
@@ -39,7 +41,11 @@ case "$SET" in
   trio)         TASKS=("${TRIO[@]}");;
   battle16)     TASKS=("${BATTLE16[@]}");;
   all24)        TASKS=("${PROBE[@]}" "${DIFFERENTIAL[@]}" "${BATTLE16[@]}");;
-  *) echo "unknown taskset: $SET"; exit 2;;
+  *)
+    # anything else = explicit SWE-Lancer task IDs, e.g.:
+    #   scripts/replicate_k3_reap.sh reap576 14294 15925 44040_470
+    TASKS=("${@:2}")
+    echo "running explicit task IDs: ${TASKS[*]}";;
 esac
 
 STREAM_ARGS=()
