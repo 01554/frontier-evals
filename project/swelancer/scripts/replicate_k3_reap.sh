@@ -53,6 +53,7 @@ case "$BUILD" in
     CAP=18000;;
   *) echo "unknown build: $BUILD"; exit 2;;
 esac
+CAP=${ROLLOUT_CAP:-$CAP}   # override the default cap; ALWAYS report a changed cap with your numbers
 MODEL=${MODEL:-$DEFAULT_MODEL}
 LLAMA_SERVER=${LLAMA_SERVER:?set LLAMA_SERVER to llama-server from 01554/llama.cpp k3-stream}
 [ -f "$MODEL" ] || { echo "model not found: $MODEL (set MODEL=...)"; exit 2; }
