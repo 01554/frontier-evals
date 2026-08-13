@@ -52,6 +52,8 @@ MODEL_TO_CTX_LIMIT = {
     "openai/kimi-k2.7-code-q2": 224000,
     "kimi-k2.7-code-q3": 84000,
     "openai/kimi-k2.7-code-q3": 84000,
+    "glm-5.2-q2": 224000,
+    "openai/glm-5.2-q2": 224000,
     "openai/gpt-4o": 128000,
     "openai/gpt-4.1": 1047576,
     "openai/o1": 200000,
@@ -111,9 +113,16 @@ def get_client_and_model(model: str) -> tuple[AsyncOpenAI, str]:
         base_url = "https://openrouter.ai/api/v1"
         api_key = os.environ.get("OPENROUTER_API_KEY")
 
+    # The OpenAI SDK default read timeout is 600s. A slow local model (large
+    # context prefill + long reasoning) can legitimately need longer for a single
+    # turn; the default clips it into an APITimeoutError, which tenacity then
+    # retries into a task-level system error. Use a generous client timeout so a
+    # long turn completes on the first attempt instead of being cut off.
+    client_timeout = float(os.environ.get("OPENAI_CLIENT_TIMEOUT", "3600"))
     return AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
+        timeout=client_timeout,
     ), model
 
 
@@ -350,9 +359,14 @@ class SimpleAgentSolver(PythonCodingSolver):
         doc="Assumes model to be in OpenRouter format of PROVIDER/MODEL",
     )
     reasoning_effort: str | None = chz.field(default=None)
-    model_response_timeout: float = chz.field(
-        default=900.0,
-        doc="Maximum wall-clock seconds to wait for one model response before grading.",
+    model_response_timeout: float | None = chz.field(
+        default=None,
+        doc=(
+            "Optional wall-clock seconds to wait for one model response before grading. "
+            "None (the default) disables the per-turn timeout, matching the original "
+            "solver: a slow turn runs to completion instead of being clipped and graded "
+            "as incomplete. Only set a value to guard against a genuinely hung backend."
+        ),
     )
     max_turns: int = chz.field(
         default=40,
@@ -410,13 +424,20 @@ class SimpleAgentSolver(PythonCodingSolver):
                 )
 
                 for remaining_turns in range(self.max_turns, 0, -1):
+                    # None => no per-turn timeout (asyncio.timeout(None) never fires),
+                    # matching the original solver. A rollout deadline, if set, still
+                    # bounds the wait.
                     response_timeout = self.model_response_timeout
                     if rollout_deadline is not None:
                         remaining_rollout_seconds = rollout_deadline - time.monotonic()
                         if remaining_rollout_seconds <= 0:
                             ctx_logger.info(rollout_timeout_message, destinations=["run"])
                             break
-                        response_timeout = min(response_timeout, remaining_rollout_seconds)
+                        response_timeout = (
+                            remaining_rollout_seconds
+                            if response_timeout is None
+                            else min(response_timeout, remaining_rollout_seconds)
+                        )
 
                     try:
                         async with asyncio.timeout(response_timeout):

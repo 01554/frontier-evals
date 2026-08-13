@@ -62,7 +62,7 @@ class QwenCliSolver(PythonCodingSolver):
         default="http://host.docker.internal:8090/v1",
         doc="Inference endpoint as seen from inside the task container.",
     )
-    npm_package: str = chz.field(default="@qwen-code/qwen-code")
+    npm_package: str = chz.field(default="@qwen-code/qwen-code@0.21.11")
     rollout_timeout: int = chz.field(
         default=10800,
         doc="Wall-clock cap for one `qwen -p` invocation, in seconds.",
