@@ -85,6 +85,12 @@ class QwenCliSolver(PythonCodingSolver):
             f"OPENAI_BASE_URL={shlex.quote(self.base_url)} "
             "OPENAI_API_KEY=local "
             f"OPENAI_MODEL={shlex.quote(self.model_id)} "
+            # A slow local server legitimately spends 400+ s in prefill before
+            # the first streamed chunk; qwen-code's default 240 s idle timeout
+            # kills the request first ("No stream activity for 240000ms after
+            # 0 chunks"). 0 disables it; the rollout wall-cap still bounds us.
+            "QWEN_STREAM_IDLE_TIMEOUT_MS=0 "
+            "QWEN_CODE_SUPPRESS_YOLO_WARNING=1 "
         )
 
     @override
