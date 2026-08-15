@@ -113,6 +113,20 @@ class QwenCliSolver(PythonCodingSolver):
                 assert "content" in task.prompt[0]
                 assert isinstance(task.prompt[0]["content"], str)
                 prompt = task.prompt[0]["content"] + "\n\n" + AGENT_PROMPT
+                # Optional counter-note against the benchmark prompt's phantom
+                # "reply in ```python blocks" scaffold instruction (that
+                # scaffold does not exist in CLI rollouts). Same idea as the
+                # rtx-side promptv1; text version-controlled here. Enable by
+                # exporting QWEN_PROMPT_NOTE=v1m; label the run accordingly.
+                if os.environ.get("QWEN_PROMPT_NOTE") == "v1m":
+                    prompt += (
+                        "\n\nIMPORTANT correction to the instructions above: "
+                        "in this environment, ```python blocks in your replies "
+                        "are NOT executed by anyone, and <user-tool> does not "
+                        "exist. The ONLY way to act is your own tool calls "
+                        "(shell, file read/write/edit). Never wait for an "
+                        "external executor."
+                    )
 
                 ctx_logger.info("Installing Qwen Code CLI...", destinations=["run"])
                 install = await computer.send_shell_command(
