@@ -5,7 +5,8 @@
 #   scripts/replicate_k3_reap.sh <build> <taskset | task_id...>
 #
 #   build:   reap640 | reap576 | full896-stream
-#   taskset: probe | differential | trio | battle16 | all24
+#   taskset: sanity3 | hard5 | trio | extended16 | all24
+#   (old names probe/differential/battle16 still accepted)
 #            or any explicit IC-SWE Diamond task IDs:
 #              scripts/replicate_k3_reap.sh reap576 14294 15925 44040_470
 #
@@ -25,7 +26,7 @@
 set -euo pipefail
 
 BUILD=${1:?usage: replicate_k3_reap.sh <reap640|reap576|full896-stream> <taskset>}
-SET=${2:?taskset: probe|differential|trio|battle16|all24}
+SET=${2:?taskset: sanity3|hard5|trio|extended16|all24}
 PORT=${PORT:-8090}
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 
@@ -36,10 +37,10 @@ BATTLE16=(29916_609 6883 43395_530 25901_945 40259_1089 18746_833 4324 44429_110
           40208_1108 44618_1007 19132_872 41885_1134 50064_846 50314_790 37688_441 44040_470)
 
 case "$SET" in
-  probe)        TASKS=("${PROBE[@]}");;
-  differential) TASKS=("${DIFFERENTIAL[@]}");;
+  sanity3|probe)          TASKS=("${PROBE[@]}");;
+  hard5|differential)     TASKS=("${DIFFERENTIAL[@]}");;
   trio)         TASKS=("${TRIO[@]}");;
-  battle16)     TASKS=("${BATTLE16[@]}");;
+  extended16|battle16)    TASKS=("${BATTLE16[@]}");;
   all24)        TASKS=("${PROBE[@]}" "${DIFFERENTIAL[@]}" "${BATTLE16[@]}");;
   *)
     # anything else = explicit SWE-Lancer task IDs, e.g.:
