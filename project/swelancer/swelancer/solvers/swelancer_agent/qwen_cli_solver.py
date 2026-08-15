@@ -19,6 +19,7 @@ conversation and does not report usage. Read correctness from
 `correct`/`earned`.
 """
 
+import os
 import shlex
 from typing import Any, AsyncGenerator
 
